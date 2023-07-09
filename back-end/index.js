@@ -2,13 +2,13 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const sharp = require("sharp");
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
+const cors = require("cors");
 
 const app = express();
 
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
+app.use(cors());
 
 const upload = multer({
   dest: "/uploads",
@@ -23,17 +23,19 @@ app.post(
       const tempPath = req.file.path;
 
       const { height, width, format } = req.body;
+      
+      console.log(tempPath, height, width, format);
 
       if (!height || isNaN(height)) {
-        throw new Error("Invalid height");
+        throw new Error("Invalid or missing height");
       }
 
-      if (!width || isNaN(width)) {
-        throw new Error("Invalid width");
+      if (!width || isNaN(height)) {
+        throw new Error("Invalid or missing width");
       }
 
-      if (!format || ["png", "jpg", "jpeg"].indexOf(format) === -1) {
-        throw new Error("Invalid format");
+      if (!format || ["PNG", "JPG", "JPEG"].indexOf(format) === -1) {
+        throw new Error("Invalid or missing format");
       }
 
       sharp(tempPath)
@@ -41,24 +43,28 @@ app.post(
           width: Number(width),
           height: Number(height),
         })
-        .toFormat(format)
+        .toFormat(format.toLocaleLowerCase())
         .toBuffer((error, buffer) => {
           if (error) {
-            throw new Error(error.message);
+            return res
+              .status(400)
+              .send({ message: "Failed to process the image" });
           }
 
-          var encodedBuffer = buffer.toString("base64");
+          const imageBase64 = buffer.toString("base64");
 
-          res.status(200).send(encodedBuffer);
+          res.status(200).send({
+            imageBase64: imageBase64,
+          });
         });
     } catch (error) {
-      res.status(400).send({ message: error.message });
+      res.status(400).send({ message: "Failed to process the image" });
     }
   }
 );
 
-const server = app.listen(8081, function () {
+const server = app.listen(80, function () {
   const port = server.address().port;
 
-  console.log("Example app listening at port", port);
+  console.log("app listening at port", port);
 });
