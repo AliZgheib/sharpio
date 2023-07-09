@@ -1,8 +1,10 @@
 import React from "react";
 import "./App.css";
+import { convertFileToBase64, downloadBase64File } from "./helper-functions";
 
 function App() {
   const [file, setFile] = React.useState<File | undefined>(undefined);
+
   const [format, setFormat] = React.useState<undefined | string>(undefined);
   const [height, setHeight] = React.useState<undefined | string>(undefined);
   const [width, setWidth] = React.useState<undefined | string>(undefined);
@@ -16,27 +18,72 @@ function App() {
       if (!file) {
         return setError("Image not found.");
       }
+
+      if (!height) {
+        return setError("Invalid or missing height");
+      }
+
+      if (!width) {
+        return setError("Invalid or missing width");
+      }
+
+      if (!format || ["PNG", "JPG", "JPEG"].indexOf(format) === -1) {
+        return setError("Invalid or missing format");
+      }
+
+      var data = new FormData();
+      data.append("file", file);
+      data.append("height", height);
+      data.append("width", width);
+      data.append("format", format);
+
       setError(undefined);
       setIsLoading(true);
-    } catch (error) {
-      setError("Image is invalid or too large.");
+
+      const rawResponse = await fetch("http://localhost/upload", {
+        method: "POST",
+        body: data,
+      });
+
+      if (rawResponse.status === 200) {
+        const content = await rawResponse.json();
+
+        downloadBase64File(content.imageBase64, format.toLocaleLowerCase());
+      } else {
+        const content = await rawResponse.json();
+        setError(content.message);
+      }
+    } catch (error: any) {
+      setError("Something went wrong");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) {
       return setFile(undefined);
     }
 
     const newFile = e.target.files[0];
     const newFileNameArr = newFile.name.split(".");
-    const fileExtension = newFileNameArr.pop()?.toUpperCase();
+    const newFileFormat = newFileNameArr.pop()?.toUpperCase();
 
-    setFile(e.target.files[0]);
-    setFormat(fileExtension);
-    setError(undefined);
+    const imageBase64 = await convertFileToBase64(newFile);
+
+    const image = new Image();
+    image.src = imageBase64;
+    image.onload = () => {
+      const { height, width } = image;
+
+      setFile(newFile);
+
+      setHeight(String(height));
+      setWidth(String(width));
+      setFormat(newFileFormat);
+
+      setError(undefined);
+    };
   };
 
   return (
@@ -80,25 +127,26 @@ function App() {
                 className="numberInput"
                 type="number"
                 placeholder="height"
-                height={height}
+                value={height}
                 onChange={(e) => setHeight(e.target.value)}
               />
               <input
                 className="numberInput"
                 type="number"
                 placeholder="width"
-                width={width}
+                value={width}
                 onChange={(e) => setWidth(e.target.value)}
               />
 
               <p id="error">{error}</p>
+
               <button
                 type="submit"
                 className="btn"
                 id="submit-btn"
                 disabled={isLoading}
               >
-                {isLoading ? "Processing..." : "Upload"}
+                {isLoading ? "Processing..." : "Convert & Download"}
               </button>
             </div>
           </form>
